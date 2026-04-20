@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>초리쌤 키오스크</title>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --toss-blue: #3182f6;
+      --toss-blue-light: #e8f3ff;
+      --toss-gray-bg: #f2f4f6;
+      --toss-card-bg: #ffffff;
+      --toss-text-main: #191f28;
+      --toss-text-sub: #4e5968;
+      --toss-border: #e5e8eb;
+      --toss-red: #f04452;
+      --toss-red-light: #feecee;
+    }
+    
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: var(--toss-gray-bg);
+      color: var(--toss-text-main);
+      margin: 0; padding: 0;
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+      letter-spacing: -0.5px;
+    }
+
+    .page { display: none; height: 100%; flex-direction: column; animation: fadeIn 0.3s ease; }
+    .page.active { display: flex; }
+
+    .toss-btn {
+      border: none; border-radius: 25px; font-weight: bold; cursor: pointer;
+      transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;
+      gap: 10px; font-size: 16px; height: 55px;
+    }
+    .toss-btn:active { transform: scale(0.96); opacity: 0.9; }
+
+    .btn-main { background-color: var(--toss-blue); color: white; box-shadow: 0 4px 10px rgba(49, 130, 246, 0.2); }
+    .btn-sub { background-color: var(--toss-blue-light); color: var(--toss-blue); }
+    .btn-red { background-color: var(--toss-red-light); color: var(--toss-red); }
+    .btn-disabled { background-color: #d1d6db; color: white; cursor: not-allowed; pointer-events: none; }
+
+    /* 커스텀 모달 */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center;
+      z-index: 2000; backdrop-filter: blur(3px);
+    }
+    .modal-content {
+      background: white; padding: 35px; border-radius: 28px; width: 90%; max-width: 380px;
+      text-align: center; box-shadow: 0 15px 40px rgba(0,0,0,0.15); animation: popIn 0.3s ease;
+    }
+    .modal-title { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+    .modal-text { font-size: 15px; color: var(--toss-text-sub); line-height: 1.6; margin-bottom: 25px; word-break: keep-all; }
+    .modal-btn-group { display: flex; gap: 12px; }
+    .modal-btn-group button { flex: 1; height: 50px; }
+
+    /* Home Page */
+    #page-home { justify-content: center; align-items: center; gap: 20px; padding: 20px; }
+    .logo-area { position: absolute; top: 40px; left: 40px; display: flex; align-items: center; gap: 18px; }
+    .logo-img { width: 70px; height: 70px; border-radius: 50%; object-fit: contain; }
+    .logo-text div:first-child { font-size: 15px; color: var(--toss-text-sub); margin-bottom: 4px; }
+    .logo-text div:last-child { font-size: 26px; font-weight: bold; color: var(--toss-blue); }
+    .home-btn { width: 100%; max-width: 320px; height: 110px; font-size: 26px; border-radius: 28px; }
+    .admin-trigger { position: absolute; bottom: 30px; right: 30px; font-size: 28px; cursor: pointer; opacity: 0.4; }
+
+    /* Shopping Page */
+    .shop-header { background: white; padding: 20px 25px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid var(--toss-border); position: sticky; top: 0; z-index: 100; }
+    .tab-container { display: flex; gap: 10px; overflow-x: auto; flex-grow: 1; scrollbar-width: none; }
+    .tab-container::-webkit-scrollbar { display: none; }
+    .tab { padding: 12px 22px; border-radius: 20px; background: #f9fafb; white-space: nowrap; cursor: pointer; font-weight: 500; color: var(--toss-text-sub); }
+    .tab.active { background: var(--toss-blue); color: white; font-weight: bold; }
+    
+    .product-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 25px; padding: 25px; overflow-y: auto; }
+    .p-card { background: white; border-radius: 24px; padding: 20px; text-align: center; box-shadow: 0 6px 15px rgba(0,0,0,0.03); cursor: pointer; }
+    .p-card img { width: 100%; height: 110px; object-fit: contain; margin-bottom: 15px; }
+    .p-name { font-weight: 500; font-size: 16px; margin-bottom: 6px; color: var(--toss-text-main); }
+    .p-price { color: var(--toss-blue); font-weight: bold; font-size: 18px; }
+
+    .cart-area { background: white; height: 38%; border-radius: 30px 30px 0 0; padding: 30px; display: flex; flex-direction: column; }
+    .cart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .cart-title { font-size: 20px; font-weight: bold; }
+    .cart-list { flex: 1; overflow-y: auto; padding-right: 5px; }
+    .cart-item { display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f2f4f6; }
+    .qty-ctrl { display: flex; align-items: center; gap: 15px; background: #f9fafb; padding: 8px 15px; border-radius: 20px; }
+    .qty-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #d1d6db; background: white; cursor: pointer; font-size: 18px; }
+
+    /* Admin Page */
+    .admin-header { background: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--toss-border); }
+    .admin-title { font-size: 20px; font-weight: bold; color: var(--toss-blue); }
+    .admin-nav { display: flex; background: white; border-bottom: 1px solid var(--toss-border); }
+    .admin-tab { flex: 1; padding: 18px; text-align: center; color: var(--toss-text-sub); cursor: pointer; font-weight: 500; }
+    .admin-tab.active { color: var(--toss-blue); font-weight: bold; border-bottom: 3px solid var(--toss-blue); }
+    .admin-content { flex: 1; padding: 25px; overflow-y: auto; display: none; }
+    .admin-content.active { display: block; }
+    .form-group { background: white; padding: 25px; border-radius: 24px; margin-bottom: 25px; }
+    .form-label { font-size: 14px; font-weight: bold; color: var(--toss-text-sub); margin-bottom: 8px; display: block; }
+    input, select { width: 100%; padding: 15px; margin-bottom: 15px; border: 1px solid #d1d6db; border-radius: 14px; box-sizing: border-box; font-size: 16px; }
+    
+    .admin-list-item { background: white; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .student-item { padding: 18px 20px; border-bottom: 1px solid #f2f4f6; display: flex; align-items: center; gap: 15px; }
+
+    /* Other Pages */
+    #page-receipt, #page-pay-select, #page-scanner, #page-qr-link { padding: 30px; align-items: center; }
+    .receipt-card { background: white; padding: 40px; border-radius: 28px; width: 100%; max-width: 450px; flex: 1; overflow-y: auto; }
+    .receipt-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 16px; }
+    .receipt-total { font-size: 24px; font-weight: bold; color: var(--toss-blue); margin-top: 25px; padding-top: 20px; border-top: 2px dashed #e5e8eb; }
+    
+    #reader { width: 100%; max-width: 400px; height: 300px; border-radius: 24px; overflow: hidden; background: black; margin: 30px 0; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  </style>
+</head>
+<body>
+
+<div id="modal-overlay" class="modal-overlay">
+  <div class="modal-content">
+    <div id="modal-title" class="modal-title"></div>
+    <div id="modal-text" class="modal-text"></div>
+    <div id="modal-btns" class="modal-btn-group"></div>
+  </div>
+</div>
+
+<div id="page-home" class="page active">
+  <div class="logo-area">
+    <img src="https://i.imgur.com/pNk2fly.png" class="logo-img">
+    <div class="logo-text"><div>초리쌤의 교수학습 콘텐츠</div><div>교육용 키오스크</div></div>
+  </div>
+  <button class="toss-btn btn-main home-btn" onclick="startScanner('reg')"><span style="font-size:30px">👋</span> QR 등록</button>
+  <button class="toss-btn btn-sub home-btn" onclick="startKiosk()"><span style="font-size:30px">🛍️</span> 키오스크 사용</button>
+  <div class="admin-trigger" onclick="adminLogin()">⚙️</div>
+</div>
+
+<div id="page-shop" class="page">
+  <div class="shop-header">
+    <div onclick="goHome()" style="font-size: 26px; cursor: pointer; color: var(--toss-text-sub);">🏠</div>
+    <div class="tab-container" id="category-tabs"></div>
+  </div>
+  <div class="product-grid" id="product-list"></div>
+  <div class="cart-area">
+    <div class="cart-header">
+      <div class="cart-title">주문내역</div>
+      <div style="font-size: 14px; color: var(--toss-text-sub);">총 <span id="cart-count">0</span>개</div>
+    </div>
+    <div class="cart-list" id="cart-items"></div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 25px 0;">
+      <span style="color: var(--toss-text-sub); font-size: 15px;">총 결제 금액</span>
+      <span id="cart-total" style="font-size: 26px; font-weight: bold; color: var(--toss-blue);">0원</span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button class="toss-btn btn-sub" style="flex: 1;" onclick="clearCart()">비우기</button>
+      <button class="toss-btn btn-main" style="flex: 2; font-size: 18px;" onclick="showReceipt()">결제하기</button>
+    </div>
+  </div>
+</div>
+
+<div id="page-receipt" class="page">
+  <h2 style="font-size: 24px; font-weight: bold; margin-top: 20px;">영수증 확인</h2>
+  <div class="receipt-card" id="receipt-content"></div>
+  <div style="display: flex; gap: 15px; width: 100%; max-width: 450px; padding-bottom: 20px;">
+    <button class="toss-btn btn-sub" style="flex: 1;" onclick="navTo('page-shop')">취소</button>
+    <button class="toss-btn btn-main" style="flex: 1.5;" onclick="navTo('page-pay-select')">결제하기</button>
+  </div>
+</div>
+
+<div id="page-pay-select" class="page" style="justify-content: center;">
+  <div style="text-align: center; margin-bottom: 40px;">
+    <div style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">결제 수단을 선택해주세요</div>
+    <div style="color: var(--toss-text-sub);">원하시는 결제 방식을 터치하세요</div>
+  </div>
+  <button class="toss-btn btn-disabled home-btn" style="opacity: 0.6;"><span style="font-size:30px">💳</span> 카드 결제</button>
+  <button class="toss-btn btn-main home-btn" onclick="startScanner('pay')"><span style="font-size:30px">📱</span> QR페이 결제</button>
+  <button class="toss-btn btn-sub" style="margin-top: 30px; width: 100%; max-width: 320px;" onclick="navTo('page-receipt')">뒤로가기</button>
+</div>
+
+<div id="page-scanner" class="page">
+  <div style="text-align: center;">
+    <div id="scanner-title" style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">QR을 스캔해주세요</div>
+    <div style="color: var(--toss-text-sub);">사각형 안에 QR코드가 들어오게 해주세요</div>
+  </div>
+  <div id="reader"></div>
+  <button class="toss-btn btn-red" style="margin-top: 20px; width: 100%; max-width: 320px;" onclick="stopScanner()">취소</button>
+</div>
+
+<div id="page-qr-link" class="page" style="align-items: stretch; padding: 0;">
+  <div class="shop-header">
+    <div onclick="goHome()" style="font-size: 26px; cursor: pointer; color: var(--toss-text-sub);">🏠</div>
+    <div style="font-size: 18px; font-weight: bold;">QR 학생증 등록</div>
+  </div>
+  <div style="padding: 20px; overflow-y: auto;">
+    <div class="form-group">
+      <label class="form-label">스캔된 QR 코드 (ID)</label>
+      <input type="text" id="reg-qr-id" readonly style="background: #f2f4f6;">
+    </div>
+    <div class="form-group" style="display: flex; gap: 10px; align-items: center; padding: 15px;">
+      <select id="reg-search-type" style="width: 90px; margin-bottom: 0;"><option>이름</option><option>학년</option><option>반</option></select>
+      <input type="text" id="reg-search-query" placeholder="학생 검색 (엔터)" onkeypress="if(event.key==='Enter') searchForReg()" style="margin-bottom: 0;">
+      <button class="toss-btn btn-main" style="height: 45px; margin-bottom: 0;" onclick="searchForReg()">검색</button>
+    </div>
+    <div id="reg-student-list" style="margin-bottom: 25px; background: white; border-radius: 20px;"></div>
+  </div>
+</div>
+
+<div id="page-admin" class="page">
+  <div class="admin-header">
+    <div class="admin-title">관리자 페이지</div>
+    <div onclick="goHome()" style="font-size: 24px; cursor: pointer; color: var(--toss-text-sub);">🏠</div>
+  </div>
+  <div class="admin-nav">
+    <div class="admin-tab active" onclick="adminTab(0)">상품 관리</div>
+    <div class="admin-tab" onclick="adminTab(1)">자산 관리</div>
+  </div>
+  
+  <div id="admin-p" class="admin-content active">
+    <div class="form-group">
+      <input type="hidden" id="p-id">
+      <label class="form-label">카테고리</label>
+      <select id="p-cat-select" onchange="if(this.value==='new') document.getElementById('p-cat-custom').style.display='block'"></select>
+      <input type="text" id="p-cat-custom" placeholder="신규 카테고리 입력" style="display:none; margin-top: -10px;">
+      <label class="form-label">상품명</label>
+      <input type="text" id="p-name" placeholder="상품 이름">
+      <label class="form-label">가격 (원)</label>
+      <input type="number" id="p-price" placeholder="가격 숫자만 입력 (예: 1000)">
+      <label class="form-label">재고</label>
+      <input type="number" id="p-stock" placeholder="초기 재고 수량">
+      <label class="form-label">이미지 URL</label>
+      <input type="text" id="p-img" placeholder="이미지 주소 복사하여 입력">
+      <button class="toss-btn btn-main" style="width: 100%; margin-top: 10px;" onclick="saveP()">상품 저장</button>
+    </div>
+    <div id="admin-p-list"></div>
+  </div>
+  
+  <div id="admin-a" class="admin-content">
+    <div class="form-group" style="display: flex; gap: 10px; align-items: center; padding: 15px;">
+      <select id="a-search-type" style="width: 100px; margin-bottom: 0;"><option>이름</option><option>학년</option><option>반</option></select>
+      <input type="text" id="a-search-query" placeholder="검색어 입력 후 엔터" onkeypress="if(event.key==='Enter') searchA()" style="margin-bottom: 0;">
+    </div>
+    <div id="admin-a-list" style="margin-bottom: 25px; max-height: 350px; overflow-y: auto; background: white; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);"></div>
+    <div class="form-group">
+      <label class="form-label">지급/차감 금액 (원)</label>
+      <input type="number" id="a-amount" placeholder="양수는 지급, 음수는 차감 (예: 500 또는 -300)">
+      <button class="toss-btn btn-main" style="width: 100%;" onclick="applyA()">선택 학생 일괄 적용</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ===================================================================
+     ⚠️⚠️⚠️ 설정: 여기에 본인의 GAS 웹앱 URL을 입력하세요 ⚠️⚠️⚠️
+     =================================================================== */
+  const API_URL = "여기에_GAS_배포URL을_붙여넣으세요";
+  /* 예시: const API_URL = "https://script.google.com/macros/s/AKfycb.../exec"; */
+
+  let products = [], cart = [], categories = ["전체"];
+  let scanMode = 'pay';
+  const f = n => Number(n).toLocaleString() + "원";
+
+  /* =========================
+     API 호출 래퍼 (google.script.run 대체)
+     ========================= */
+  async function callAPI(action, payload = {}) {
+    if (!API_URL || API_URL.includes("여기에_")) {
+      throw new Error("API_URL이 설정되지 않았습니다. index.html 상단을 확인해주세요.");
+    }
+    
+    // GAS는 CORS preflight를 거치지 않도록 text/plain으로 전송해야 함
+    const res = await fetch(API_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action, payload })
+    });
+    
+    if (!res.ok) throw new Error("서버 응답 오류: " + res.status);
+    return await res.json();
+  }
+
+  function navTo(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  
+  function goHome() { 
+    cart = []; 
+    updateCartUI(); 
+    closeModal(); 
+    navTo('page-home'); 
+  }
+
+  function showTossModal(title, text, btns = []) {
+    const overlay = document.getElementById('modal-overlay');
+    document.getElementById('modal-title').innerText = title;
+    document.getElementById('modal-text').innerHTML = text;
+    const btnContainer = document.getElementById('modal-btns');
+    btnContainer.innerHTML = '';
+    
+    if(btns.length === 0) btns = [{t: '확인', c: 'btn-main', f: () => overlay.style.display='none'}];
+    
+    btns.forEach(b => {
+      const el = document.createElement('button');
+      el.className = 'toss-btn ' + b.c;
+      el.innerText = b.t;
+      el.onclick = b.f;
+      btnContainer.appendChild(el);
+    });
+    overlay.style.display = 'flex';
+  }
+  function closeModal() { document.getElementById('modal-overlay').style.display='none'; }
+
+  // Kiosk Start
+  async function startKiosk() {
+    showTossModal("데이터 로딩 중...", "상품 목록을 가져오고 있습니다.");
+    try {
+      const data = await callAPI('getProducts');
+      closeModal();
+      products = data;
+      categories = ["전체", ...new Set(data.map(p => p.category))];
+      renderTabs();
+      renderProducts("전체");
+      navTo('page-shop');
+    } catch(err) {
+      closeModal();
+      showTossModal("오류", "서버에서 데이터를 불러오지 못했습니다.<br>" + err.message);
+    }
+  }
+
+  function renderTabs() {
+    const container = document.getElementById('category-tabs');
+    container.innerHTML = categories.map(c => `<div class="tab" onclick="renderProducts('${c}', this)">${c}</div>`).join('');
+    if(container.firstChild) container.firstChild.classList.add('active');
+  }
+
+  function renderProducts(cat, el) {
+    if(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); el.classList.add('active'); }
+    const list = cat === "전체" ? products : products.filter(p => p.category === cat);
+    document.getElementById('product-list').innerHTML = list.map(p => `
+      <div class="p-card" onclick="addToCart('${p.id}')">
+        <img src="${p.img || 'https://via.placeholder.com/150'}">
+        <div class="p-name">${p.name}</div>
+        <div class="p-price">${f(p.price)}</div>
+      </div>
+    `).join('');
+  }
+
+  function addToCart(id) {
+    const p = products.find(x => x.id === id);
+    const item = cart.find(x => x.id === id);
+    if(item) item.qty++;
+    else cart.push({...p, qty: 1});
+    updateCartUI();
+  }
+
+  function updateCartUI() {
+    const list = document.getElementById('cart-items');
+    list.innerHTML = cart.map((item, i) => `
+      <div class="cart-item">
+        <div>
+          <div class="p-name">${item.name}</div>
+          <div style="font-size: 14px; color: var(--toss-blue); font-weight: bold;">${f(item.price * item.qty)}</div>
+        </div>
+        <div class="qty-ctrl">
+          <button class="qty-btn" onclick="changeQty(${i}, -1)">-</button>
+          <span style="font-weight: bold; width: 20px; text-align: center;">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty(${i}, 1)">+</button>
+          <span style="margin-left:15px; color:var(--toss-red); cursor:pointer; font-size: 20px;" onclick="askRemove(${i})">✕</span>
+        </div>
+      </div>
+    `).join('');
+    const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+    const count = cart.reduce((s, i) => s + i.qty, 0);
+    document.getElementById('cart-total').innerText = f(total);
+    document.getElementById('cart-count').innerText = count;
+  }
+
+  function changeQty(i, delta) {
+    cart[i].qty += delta;
+    if(cart[i].qty <= 0) askRemove(i);
+    else updateCartUI();
+  }
+
+  function askRemove(i) {
+    showTossModal("삭제하시겠습니까?", `'${cart[i].name}'을(를) 장바구니에서 뺍니다.`, [
+      {t: '취소', c: 'btn-sub', f: closeModal},
+      {t: '삭제', c: 'btn-red', f: () => { cart.splice(i, 1); updateCartUI(); closeModal(); }}
+    ]);
+  }
+  function clearCart() {
+    if(cart.length === 0) return;
+    showTossModal("장바구니 비우기", "담긴 모든 상품을 삭제하시겠습니까?", [
+      {t: '취소', c: 'btn-sub', f: closeModal},
+      {t: '비우기', c: 'btn-red', f: () => { cart = []; updateCartUI(); closeModal(); }}
+    ]);
+  }
+
+  function showReceipt() {
+    if(cart.length === 0) return showTossModal("앗!", "담긴 상품이 없습니다.");
+    const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+    let html = cart.map(i => `<div class="receipt-row"><span>${i.name} x ${i.qty}</span><span>${f(i.price*i.qty)}</span></div>`).join('');
+    html += `<div class="receipt-total"><span>총액</span><span>${f(total)}</span></div>`;
+    document.getElementById('receipt-content').innerHTML = html;
+    navTo('page-receipt');
+  }
+
+  /* =========================
+     QR Scanner (실시간 카메라)
+     ========================= */
+  let html5QrCode;
+  function startScanner(mode) {
+    scanMode = mode;
+    document.getElementById('scanner-title').innerText = mode === 'pay' ? "QR 학생증을 스캔해주세요" : "등록할 QR을 스캔해주세요";
+    navTo('page-scanner');
+    showTossModal("로딩 중", "카메라를 켜고 있습니다...");
+
+    if(html5QrCode) html5QrCode.clear();
+    html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    const tryCamera = (facingMode) => {
+      return html5QrCode.start({ facingMode: facingMode }, config, onScanSuccess);
+    };
+
+    tryCamera("environment")
+      .then(() => closeModal())
+      .catch(err => {
+        tryCamera("user")
+          .then(() => closeModal())
+          .catch(finalErr => {
+            closeModal();
+            console.error("Camera Error:", finalErr);
+            let errorMsg = "카메라를 실행할 수 없습니다.<br><br>";
+            errorMsg += "💡 브라우저에서 <b>카메라 권한</b>을 허용해주세요.<br><br>";
+            errorMsg += "💡 <b>카카오톡 등 인앱 브라우저</b>에서는 작동하지 않을 수 있습니다. <b>크롬(Chrome)/사파리(Safari)</b>로 접속해주세요.";
+            showTossModal("카메라 권한 필요 📸", errorMsg, [{t: '돌아가기', c: 'btn-main', f: closeModal}]);
+          });
+      });
+  }
+
+  function stopScanner() {
+    if(html5QrCode && html5QrCode.isScanning) {
+      html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => {});
+    }
+    scanMode === 'pay' ? navTo('page-pay-select') : goHome();
+  }
+
+  async function onScanSuccess(decodedText) {
+    // 카메라 먼저 중지
+    if(html5QrCode && html5QrCode.isScanning) {
+      try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e) {}
+    }
+    
+    if(scanMode === 'pay') {
+      const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+      const summary = cart.map(i => `${i.name}(${i.qty})`).join(', ');
+      const simpleCart = cart.map(i => ({id: i.id, qty: i.qty}));
+      
+      showTossModal("결제 중...", "잔액을 확인하고 있습니다.");
+      try {
+        const res = await callAPI('processPayment', {
+          qrId: decodedText,
+          totalAmount: total,
+          itemsSummary: summary,
+          cartItems: simpleCart
+        });
+        closeModal();
+        if(res.success) {
+          showTossModal("<span style='font-size:40px'>🎉</span><br>결제 완료", "결제가 정상 처리되었습니다.<br>감사합니다!", [{t: '확인', c: 'btn-main', f: goHome}]);
+          setTimeout(goHome, 3000);
+        } else {
+          showTossModal("결제 실패", "<b>" + res.msg + "</b>", [
+            {t: '다시 시도', c: 'btn-main', f: () => startScanner('pay')},
+            {t: '취소', c: 'btn-sub', f: goHome}
+          ]);
+        }
+      } catch(err) {
+        closeModal();
+        showTossModal("오류", "서버 통신 실패: " + err.message);
+      }
+        
+    } else if (scanMode === 'reg') {
+      document.getElementById('reg-qr-id').value = decodedText;
+      document.getElementById('reg-student-list').innerHTML = '';
+      navTo('page-qr-link');
+    }
+  }
+
+  // QR 등록 검색 로직
+  async function searchForReg() {
+    const type = document.getElementById('reg-search-type').value;
+    const query = document.getElementById('reg-search-query').value;
+    if(!query) return alert("검색어를 입력하세요.");
+    
+    document.getElementById('reg-student-list').innerHTML = '<div style="padding:20px; text-align:center;">검색 중...</div>';
+    
+    try {
+      const data = await callAPI('getStudents', {type, query});
+      if(data.length === 0) {
+        document.getElementById('reg-student-list').innerHTML = '<div style="padding:20px; text-align:center; color:var(--toss-text-sub);">검색 결과가 없습니다.</div>';
+        return;
+      }
+      document.getElementById('reg-student-list').innerHTML = data.map(s => `
+        <div class="student-item" style="justify-content: space-between;">
+          <div>
+            <div style="font-weight:bold;">${s.학년}학년 ${s.반}반 ${s.번호}번 ${s.name}</div>
+            <div style="font-size:14px; color:var(--toss-text-sub);">현재 ID: ${s.id || '미등록'}</div>
+          </div>
+          <button class="toss-btn btn-sub" style="height: 35px; padding: 0 15px; font-size: 14px;" onclick="doLinkQR('${s.학년}', '${s.반}', '${s.번호}', '${s.name}')">연결</button>
+        </div>
+      `).join('');
+    } catch(err) {
+      document.getElementById('reg-student-list').innerHTML = `<div style="color:red; padding:20px; text-align:center;">오류: ${err.message}</div>`;
+    }
+  }
+
+  function doLinkQR(grade, cls, num, name) {
+    const qrId = document.getElementById('reg-qr-id').value;
+    showTossModal("QR 연결", `[${grade}-${cls}-${num} ${name}] 학생에게 스캔한 ID를 연결하시겠습니까?`, [
+      {t: '취소', c: 'btn-sub', f: closeModal},
+      {t: '등록', c: 'btn-main', f: async () => {
+        closeModal();
+        showTossModal("등록 중...", "잠시만 기다려주세요.");
+        try {
+          const res = await callAPI('linkQRToStudent', {grade, cls, num, name, qrId});
+          closeModal();
+          if(res.success) {
+            showTossModal("완료", "성공적으로 연동되었습니다.", [{t: '홈으로', c: 'btn-main', f: goHome}]);
+          } else {
+            showTossModal("오류", res.msg);
+          }
+        } catch(err) {
+          closeModal();
+          showTossModal("오류", err.message);
+        }
+      }}
+    ]);
+  }
+
+  // Admin Logic
+  function adminLogin() {
+    const pin = prompt("비밀번호를 입력하세요.");
+    if(pin === "5863") { navTo('page-admin'); adminTab(0); }
+    else if(pin !== null) { alert("비밀번호가 틀렸습니다."); }
+  }
+
+  function adminTab(n) {
+    document.querySelectorAll('.admin-tab').forEach((t, i) => t.classList.toggle('active', i===n));
+    document.querySelectorAll('.admin-content').forEach((c, i) => c.classList.toggle('active', i===n));
+    if(n === 0) loadAdminP();
+    if(n === 1) document.getElementById('admin-a-list').innerHTML = '';
+  }
+
+  async function loadAdminP() {
+    document.getElementById('admin-p-list').innerHTML = '<div style="padding:20px; text-align:center;">데이터를 불러오는 중...</div>';
+    try {
+      const data = await callAPI('getProducts');
+      const sel = document.getElementById('p-cat-select');
+      const cats = [...new Set(data.map(p => p.category))];
+      sel.innerHTML = `<option value="">카테고리 선택</option>` + cats.map(c => `<option>${c}</option>`).join('') + `<option value="new">+ 직접 입력</option>`;
+      
+      document.getElementById('admin-p-list').innerHTML = data.map(p => `
+        <div class="admin-list-item">
+          <div>
+            <div style="font-weight:bold;">${p.name} <span style="font-size:12px; color:var(--toss-text-sub);">/ 재고:${p.stock}</span></div>
+            <div style="font-size:14px; color:var(--toss-blue);">${f(p.price)}</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="toss-btn btn-sub" style="height:35px; font-size:14px; padding:0 15px;" onclick="editP('${p.id}')">수정</button>
+            <button class="toss-btn btn-red" style="height:35px; font-size:14px; padding:0 15px;" onclick="delP('${p.id}')">삭제</button>
+          </div>
+        </div>
+      `).join('');
+      products = data;
+    } catch(err) {
+      document.getElementById('admin-p-list').innerHTML = `<div style="color:red; text-align:center;">오류: ${err.message}</div>`;
+    }
+  }
+
+  async function saveP() {
+    const cat = document.getElementById('p-cat-select').value === 'new' ? document.getElementById('p-cat-custom').value : document.getElementById('p-cat-select').value;
+    const p = {
+      id: document.getElementById('p-id').value,
+      category: cat,
+      name: document.getElementById('p-name').value,
+      price: document.getElementById('p-price').value,
+      stock: document.getElementById('p-stock').value,
+      img: document.getElementById('p-img').value
+    };
+    if(!p.name || !p.price) return alert("상품명과 가격은 필수입니다.");
+    
+    showTossModal("저장 중", "상품 정보를 업데이트하고 있습니다.");
+    try {
+      await callAPI('saveProduct', p);
+      closeModal(); 
+      loadAdminP(); 
+      document.getElementById('p-id').value = '';
+      document.getElementById('p-cat-custom').value = '';
+      document.getElementById('p-cat-custom').style.display='none';
+      document.querySelectorAll('#admin-p input').forEach(i => i.value = ''); 
+    } catch(err) {
+      closeModal();
+      alert("저장 실패: " + err.message);
+    }
+  }
+
+  function editP(id) {
+    const p = products.find(x => x.id === id);
+    document.getElementById('p-id').value = p.id;
+    document.getElementById('p-cat-select').value = p.category;
+    document.getElementById('p-name').value = p.name;
+    document.getElementById('p-price').value = p.price;
+    document.getElementById('p-stock').value = p.stock;
+    document.getElementById('p-img').value = p.img;
+    window.scrollTo(0, 0);
+  }
+
+  function delP(id) {
+    const p = products.find(x => x.id === id);
+    showTossModal("상품 삭제", `'${p.name}'을(를) 삭제하시겠습니까?`, [
+      {t: '취소', c: 'btn-sub', f: closeModal},
+      {t: '삭제', c: 'btn-red', f: async () => {
+        closeModal();
+        await callAPI('deleteProduct', {id});
+        loadAdminP();
+      }}
+    ]);
+  }
+
+  async function searchA() {
+    const type = document.getElementById('a-search-type').value;
+    const query = document.getElementById('a-search-query').value;
+    if(!query) return alert("검색어를 입력하세요.");
+    document.getElementById('admin-a-list').innerHTML = '<div style="padding:20px; text-align:center;">검색 중...</div>';
+    try {
+      const data = await callAPI('getStudents', {type, query});
+      if(data.length === 0) {
+        document.getElementById('admin-a-list').innerHTML = '<div style="padding:20px; text-align:center; color:var(--toss-text-sub);">검색 결과가 없습니다.</div>';
+        return;
+      }
+      document.getElementById('admin-a-list').innerHTML = data.map(s => `
+        <div class="student-item">
+          <input type="checkbox" class="a-check" value="${s.id}" style="width:20px; height:20px; margin:0;"> 
+          <div style="flex:1;">
+            <div style="font-weight:bold;">${s.학년}학년 ${s.반}반 ${s.name}</div>
+            <div style="font-size:14px; color:var(--toss-blue); font-weight:bold;">현재: ${f(s.balance)}</div>
+          </div>
+        </div>
+      `).join('');
+    } catch(err) {
+      document.getElementById('admin-a-list').innerHTML = `<div style="color:red; padding:20px; text-align:center;">오류: ${err.message}</div>`;
+    }
+  }
+
+  function applyA() {
+    const ids = Array.from(document.querySelectorAll('.a-check:checked')).map(c => c.value);
+    const amt = document.getElementById('a-amount').value;
+    if(ids.length === 0) return alert("대상 학생을 선택하세요.");
+    if(!amt) return alert("지급/차감 금액을 입력하세요.");
+    showTossModal("자산 업데이트", "선택한 학생들의 잔액을 수정합니다.", [
+      {t: '취소', c: 'btn-sub', f: closeModal},
+      {t: '적용', c: 'btn-main', f: async () => {
+        closeModal(); 
+        showTossModal("처리 중...", "잠시만 기다려주세요.");
+        try {
+          await callAPI('updateAsset', {ids, amt});
+          closeModal(); 
+          alert("적용되었습니다."); 
+          document.getElementById('a-amount').value = ''; 
+          searchA(); 
+        } catch(err) {
+          closeModal();
+          alert("실패: " + err.message);
+        }
+      }}
+    ]);
+  }
+
+  window.onload = function() {
+    if(typeof Html5Qrcode === 'undefined') {
+      alert("QR 스캐너 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.");
+    }
+  };
+</script>
+</body>
+</html>
